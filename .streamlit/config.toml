@@ -1,6 +1,12 @@
-theme = "dark"
-primaryColor = "#1f1f1f"
-backgroundColor = "#121212"
-secondaryBackgroundColor = "#1e1e1e"
-textColor = "#ffffff"
+[theme]
+primaryColor = "#FF6B6B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
 font = "sans serif"
+
+[client]
+showErrorDetails = true
+
+[logger]
+level = "info"
