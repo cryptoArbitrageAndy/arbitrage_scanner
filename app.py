@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import time
 from src.arbitrage_scanner import find_arbitrage
 
 # === STREAMLIT UI ===
