@@ -16,14 +16,19 @@ for name in EXCHANGES:
 # === FETCH PRICE ===
 def fetch_price(exchange, symbol, exchange_name):
     try:
-        # Adjust symbol format per exchange
+        # Normalize symbol per exchange
         if exchange_name == 'kraken':
             symbol = symbol.replace('USDT', 'USD').replace('/', '')
         elif exchange_name == 'coinbase':
             symbol = symbol.replace('USDT', 'USD')
+        elif exchange_name in ['huobi', 'okx', 'bybit']:
+            # These support standard format
+            symbol = symbol.lower()
+        
         ticker = exchange.fetch_ticker(symbol)
         return ticker['bid'], ticker['ask']
     except Exception as e:
+        # Silently skip unsupported pairs
         return None, None
 
 # === FIND ARBITRAGE ===
