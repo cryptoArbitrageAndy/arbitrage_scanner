@@ -27,7 +27,7 @@ def fetch_price(exchange, symbol, exchange_name):
         # Adjust symbol format per exchange
         if exchange_name == 'kraken':
             symbol = symbol.replace('USDT', 'USD').replace('/', '')
-        elif exchange_name == 'coinbasepro':
+        elif exchange_name == 'coinbase':
             symbol = symbol.replace('USDT', 'USD')
         ticker = exchange.fetch_ticker(symbol)
         return ticker['bid'], ticker['ask']
