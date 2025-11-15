@@ -5,14 +5,14 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# === KONFIGURATION ===
+# === CONFIG ===
 EXCHANGES = ['binance', 'kraken', 'coinbasepro']
 SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
-MIN_DIFF = 1.0  # Mindest-Differenz in %
-FEE_RATE = 0.002  # 0.2% Gebühr pro Trade
+MIN_DIFF = 1.0  # Minimum profit % to show
+FEE_RATE = 0.002  # 0.2% per trade (conservative)
 REFRESH_SEC = 15
 
-# === EXCHANGES INITIALISIEREN ===
+# === INITIALIZE EXCHANGES ===
 exchanges = {}
 for name in EXCHANGES:
     exchange_class = getattr(ccxt, name)
@@ -21,28 +21,26 @@ for name in EXCHANGES:
         'timeout': 10000,
     })
 
-# === PREIS HOLEN ===
-def fetch_price(exchange, symbol):
+# === FETCH PRICE ===
+def fetch_price(exchange, symbol, exchange_name):
     try:
-        # Symbol anpassen (z.B. BTC/USDT → BTC/USDT:USDT für Kraken)
-        try:
-            ticker = exchange.fetch_ticker(symbol)
-        except:
-            # Kraken/Coinbase brauchen oft anderes Format
-            alt_symbol = symbol.replace('/', '-') if name in ['kraken', 'coinbasepro'] else symbol
-            ticker = exchange.fetch_ticker(alt_symbol)
+        # Adjust symbol format per exchange
+        if exchange_name == 'kraken':
+            symbol = symbol.replace('USDT', 'USD').replace('/', '')
+        elif exchange_name == 'coinbasepro':
+            symbol = symbol.replace('USDT', 'USD')
+        ticker = exchange.fetch_ticker(symbol)
         return ticker['bid'], ticker['ask']
     except Exception as e:
-        st.warning(f"{name}: {symbol} nicht verfügbar")
         return None, None
 
-# === ARBITRAGE FINDEN ===
+# === FIND ARBITRAGE ===
 def find_arbitrage():
     results = []
     for symbol in SYMBOLS:
         prices = {}
         for name, exchange in exchanges.items():
-            bid, ask = fetch_price(exchange, symbol)
+            bid, ask = fetch_price(exchange, symbol, name)
             if bid and ask:
                 mid_price = (bid + ask) / 2
                 prices[name] = mid_price
@@ -60,40 +58,39 @@ def find_arbitrage():
             sell_ex = max(prices, key=prices.get)
             results.append({
                 'Pair': symbol,
-                'Kaufen': f"{buy_ex.upper()} @ ${prices[buy_ex]:,.2f}",
-                'Verkaufen': f"{sell_ex.upper()} @ ${prices[sell_ex]:,.2f}",
-                'Differenz': f"{diff_pct:.2f}%",
-                'Gewinn (nach Gebühren)': f"{profit:.2f}%",
-                'Zeit': datetime.now().strftime("%H:%M:%S")
+                'Buy': f"{buy_ex.upper()} @ ${prices[buy_ex]:,.2f}",
+                'Sell': f"{sell_ex.upper()} @ ${prices[sell_ex]:,.2f}",
+                'Spread': f"{diff_pct:.2f}%",
+                'Profit (after fees)': f"{profit:.2f}%",
+                'Time': datetime.now().strftime("%H:%M:%S")
             })
 
     return pd.DataFrame(results) if results else pd.DataFrame()
 
-# === STREAMLIT UI ===
+# === STREAMLIT UI (ENGLISH) ===
 st.set_page_config(page_title="Crypto Arbitrage Scanner", layout="wide")
 st.title("Live Crypto Arbitrage Scanner")
-st.caption("Binance • Kraken • Coinbase • Aktualisierung alle 15s | Nicht als Handelsempfehlung")
+st.caption("Binance • Kraken • Coinbase • Updates every 15s | Not financial advice")
 
-with st.expander("Wichtige Hinweise", expanded=True):
+with st.expander("Important Disclaimer", expanded=True):
     st.markdown("""
-    - Dies ist **keine Finanzberatung**.
-    - Arbitrage-Chancen können **in Sekunden verschwinden**.
-    - Gebühren, Slippage & Latenz sind **nicht live berechnet**.
-    - Nutzung auf eigene Gefahr.
+    - This is **not financial advice**.
+    - Arbitrage opportunities may **disappear in seconds**.
+    - Fees, slippage & latency are **estimates**.
+    - Use at your own risk.
     """)
 
 placeholder = st.empty()
 status = st.empty()
 
-# Auto-Refresh
 while True:
     with placeholder.container():
         df = find_arbitrage()
         if not df.empty:
-            st.success(f"{len(df)} Arbitrage-Chance(n) gefunden!")
+            st.success(f"{len(df)} arbitrage opportunity(ies) found!")
             st.dataframe(df, use_container_width=True)
         else:
-            st.info("Keine profitablen Chancen im Moment. Warte auf Refresh...")
+            st.info("No profitable opportunities right now. Waiting for refresh...")
     
-    status.write(f"Letzter Scan: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
+    status.write(f"Last scan: {datetime.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
     time.sleep(REFRESH_SEC)

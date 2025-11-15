@@ -1,19 +1,19 @@
-# arbitrage_scanner
+# Crypto Arbitrage Scanner
 
-Live-Scanner für Krypto-Arbitrage zwischen **Binance, Kraken, Coinbase**.
+Live scanner for crypto arbitrage across **Binance, Kraken, and Coinbase**.
 
 ## Features
-- Echtzeit-Preisabgleich
-- Profitberechnung nach Gebühren
-- Automatischer Refresh alle 15s
-- DSGVO-konform, keine Logins
+- Real-time price comparison
+- Profit calculation after fees
+- Auto-refresh every 15 seconds
+- No login, DSGVO-compliant
 
 ## Live Demo
 [https://crypto-arbitrage-scanner.onrender.com](https://crypto-arbitrage-scanner.onrender.com)
 
-## Tech
+## Tech Stack
 - Python + CCXT
 - Streamlit UI
-- Render.com Hosting
+- Hosted on Render.com
 
-> **Hinweis:** Keine Finanzberatung. Chancen können sofort verschwinden.
+> **Disclaimer:** Not financial advice. Opportunities can vanish instantly.
