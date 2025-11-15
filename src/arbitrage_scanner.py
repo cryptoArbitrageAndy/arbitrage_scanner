@@ -1,16 +1,8 @@
-# arbitrage_scanner.py
 import ccxt
-import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime
-
-# === CONFIG ===
-EXCHANGES = ['binance', 'kraken', 'coinbasepro']
-SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
-MIN_DIFF = 1.0  # Minimum profit % to show
-FEE_RATE = 0.002  # 0.2% per trade (conservative)
-REFRESH_SEC = 15
+from .config import EXCHANGES, SYMBOLS, MIN_DIFF, FEE_RATE, REFRESH_SEC
 
 # === INITIALIZE EXCHANGES ===
 exchanges = {}
@@ -66,31 +58,3 @@ def find_arbitrage():
             })
 
     return pd.DataFrame(results) if results else pd.DataFrame()
-
-# === STREAMLIT UI (ENGLISH) ===
-st.set_page_config(page_title="Crypto Arbitrage Scanner", layout="wide")
-st.title("Live Crypto Arbitrage Scanner")
-st.caption("Binance • Kraken • Coinbase • Updates every 15s | Not financial advice")
-
-with st.expander("Important Disclaimer", expanded=True):
-    st.markdown("""
-    - This is **not financial advice**.
-    - Arbitrage opportunities may **disappear in seconds**.
-    - Fees, slippage & latency are **estimates**.
-    - Use at your own risk.
-    """)
-
-placeholder = st.empty()
-status = st.empty()
-
-while True:
-    with placeholder.container():
-        df = find_arbitrage()
-        if not df.empty:
-            st.success(f"{len(df)} arbitrage opportunity(ies) found!")
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No profitable opportunities right now. Waiting for refresh...")
-    
-    status.write(f"Last scan: {datetime.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
-    time.sleep(REFRESH_SEC)

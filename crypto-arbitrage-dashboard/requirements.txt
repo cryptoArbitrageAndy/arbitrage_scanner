@@ -1,5 +1,0 @@
-ccxt
-streamlit
-pandas
-datetime
-```

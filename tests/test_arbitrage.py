@@ -6,7 +6,7 @@ from unittest.mock import patch
 mock_prices = {
     'binance': 50000,
     'kraken': 49500,
-    'coinbasepro': 50500
+    'coinbase': 50500
 }
 
 def test_find_arbitrage():
@@ -14,7 +14,7 @@ def test_find_arbitrage():
         mock_fetch.side_effect = [
             (49000, 49500),  # Binance
             (48000, 49000),  # Kraken
-            (50000, 50500)   # CoinbasePro
+            (50000, 50500)   # coinbase
         ]
         
         result = find_arbitrage()
@@ -31,7 +31,7 @@ def test_no_arbitrage():
         mock_fetch.side_effect = [
             (50000, 50500),  # Binance
             (50000, 50500),  # Kraken
-            (50000, 50500)   # CoinbasePro
+            (50000, 50500)   # coinbase
         ]
         
         result = find_arbitrage()
