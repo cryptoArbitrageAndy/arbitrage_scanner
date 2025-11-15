@@ -1,34 +1,58 @@
 import ccxt
 import pandas as pd
 import time
+import logging
 from datetime import datetime
 from .config import EXCHANGES, SYMBOLS, MIN_DIFF, FEE_RATE, REFRESH_SEC
+
+# === LOGGING ===
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # === INITIALIZE EXCHANGES ===
 exchanges = {}
 for name in EXCHANGES:
-    exchange_class = getattr(ccxt, name)
-    exchanges[name] = exchange_class({
-        'enableRateLimit': True,
-        'timeout': 10000,
-    })
+    try:
+        exchange_class = getattr(ccxt, name)
+        exchanges[name] = exchange_class({
+            'enableRateLimit': True,
+            'timeout': 10000,
+        })
+        logger.info(f"✅ {name} initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to init {name}: {e}")
+
+# === VALIDATE SYMBOLS ===
+def get_supported_symbols(exchange, exchange_name):
+    """Fetch supported symbols for an exchange"""
+    try:
+        exchange.load_markets()
+        symbols = list(exchange.symbols)
+        logger.debug(f"{exchange_name} supports {len(symbols)} pairs")
+        return symbols
+    except Exception as e:
+        logger.error(f"Failed to load markets for {exchange_name}: {e}")
+        return []
 
 # === FETCH PRICE ===
 def fetch_price(exchange, symbol, exchange_name):
     try:
         # Normalize symbol per exchange
         if exchange_name == 'kraken':
-            symbol = symbol.replace('USDT', 'USD').replace('/', '')
+            normalized = symbol.replace('USDT', 'USD').replace('/', '')
         elif exchange_name == 'coinbase':
-            symbol = symbol.replace('USDT', 'USD')
+            normalized = symbol.replace('USDT', 'USD')
         elif exchange_name in ['huobi', 'okx', 'bybit']:
-            # These support standard format
-            symbol = symbol.lower()
+            normalized = symbol.lower()
+        else:
+            normalized = symbol
         
-        ticker = exchange.fetch_ticker(symbol)
-        return ticker['bid'], ticker['ask']
+        ticker = exchange.fetch_ticker(normalized)
+        bid, ask = ticker['bid'], ticker['ask']
+        logger.debug(f"{exchange_name} {normalized}: bid={bid}, ask={ask}")
+        return bid, ask
     except Exception as e:
-        # Silently skip unsupported pairs
+        logger.debug(f"⚠️  {exchange_name} {symbol}: {str(e)[:50]}")
         return None, None
 
 # === FIND ARBITRAGE ===
@@ -43,6 +67,7 @@ def find_arbitrage():
                 prices[name] = mid_price
 
         if len(prices) < 2:
+            logger.info(f"⚠️  {symbol}: Only {len(prices)} exchange(s) available")
             continue
 
         max_price = max(prices.values())
@@ -61,5 +86,6 @@ def find_arbitrage():
                 'Profit (after fees)': f"{profit:.2f}%",
                 'Time': datetime.now().strftime("%H:%M:%S")
             })
+            logger.info(f"✅ Arbitrage found: {symbol} ({profit:.2f}%)")
 
     return pd.DataFrame(results) if results else pd.DataFrame()

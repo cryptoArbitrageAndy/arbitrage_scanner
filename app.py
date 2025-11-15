@@ -16,17 +16,24 @@ with st.expander("Important Disclaimer", expanded=True):
     - Use at your own risk.
     """)
 
-placeholder = st.empty()
-status = st.empty()
+df = find_arbitrage()
 
-while True:
-    with placeholder.container():
-        df = find_arbitrage()
-        if not df.empty:
-            st.success(f"{len(df)} arbitrage opportunity(ies) found!")
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No profitable opportunities right now. Waiting for refresh...")
+if not df.empty:
+    st.success(f"✅ {len(df)} arbitrage opportunity(ies) found!")
+    st.dataframe(df, use_container_width=True)
+else:
+    st.info("⏳ No profitable opportunities right now...")
 
-    status.write(f"Last scan: {pd.Timestamp.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
-    time.sleep(15)
+col1, col2 = st.columns([2, 1])
+with col1:
+    st.write(f"**Last scan:** {pd.Timestamp.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
+
+with col2:
+    countdown_placeholder = st.empty()
+
+# Countdown loop
+for i in range(30, 0, -1):
+    countdown_placeholder.metric("Next refresh in", f"{i}s")
+    time.sleep(1)
+
+st.rerun()

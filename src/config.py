@@ -9,6 +9,6 @@ SYMBOLS = [
     # Fiat pairs
     'BTC/USD', 'ETH/EUR'
 ]
-MIN_DIFF = 0.05  # Increased threshold (more exchanges = more noise)
+MIN_DIFF = 0.1  # Increased threshold (more exchanges = more noise)
 FEE_RATE = 0.002  # 0.2% per trade
 REFRESH_SEC = 15
