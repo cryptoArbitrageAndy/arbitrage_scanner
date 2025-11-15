@@ -6,7 +6,7 @@ from datetime import datetime
 from .config import EXCHANGES, SYMBOLS, MIN_DIFF, FEE_RATE, REFRESH_SEC
 
 # === LOGGING ===
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # === INITIALIZE EXCHANGES ===
@@ -22,42 +22,44 @@ for name in EXCHANGES:
     except Exception as e:
         logger.error(f"❌ Failed to init {name}: {e}")
 
-# === VALIDATE SYMBOLS ===
-def get_supported_symbols(exchange, exchange_name):
-    """Fetch supported symbols for an exchange"""
-    try:
-        exchange.load_markets()
-        symbols = list(exchange.symbols)
-        logger.debug(f"{exchange_name} supports {len(symbols)} pairs")
-        return symbols
-    except Exception as e:
-        logger.error(f"Failed to load markets for {exchange_name}: {e}")
-        return []
-
 # === FETCH PRICE ===
 def fetch_price(exchange, symbol, exchange_name):
     try:
         # Normalize symbol per exchange
-        if exchange_name == 'kraken':
-            normalized = symbol.replace('USDT', 'USD').replace('/', '')
+        if exchange_name == 'binance':
+            normalized = symbol.replace('/', '')
         elif exchange_name == 'coinbase':
-            normalized = symbol.replace('USDT', 'USD')
-        elif exchange_name in ['huobi', 'okx', 'bybit']:
-            normalized = symbol.lower()
+            normalized = symbol.replace('/', '-')
+        elif exchange_name == 'kraken':
+            base = symbol.split('/')[0]
+            quote = symbol.split('/')[1]
+            if base == 'BTC':
+                normalized = 'XXBTZUSD' if quote == 'USD' else 'XBTUSDT'
+            elif base == 'ETH':
+                normalized = 'XETHZUSD' if quote == 'USD' else 'ETHUSDT'
+            else:
+                normalized = symbol.replace('/', 'Z' if quote == 'USD' else '')
+        elif exchange_name == 'okx':
+            normalized = symbol.replace('/', '-')
+        elif exchange_name == 'bybit':
+            normalized = symbol.replace('/', '')
+        elif exchange_name == 'huobi':
+            normalized = symbol.replace('/', '').lower()
         else:
             normalized = symbol
         
         ticker = exchange.fetch_ticker(normalized)
         bid, ask = ticker['bid'], ticker['ask']
-        logger.debug(f"{exchange_name} {normalized}: bid={bid}, ask={ask}")
         return bid, ask
     except Exception as e:
-        logger.debug(f"⚠️  {exchange_name} {symbol}: {str(e)[:50]}")
+        logger.error(f"❌ {exchange_name} {symbol}: {str(e)}")
         return None, None
 
 # === FIND ARBITRAGE ===
 def find_arbitrage():
+    logger.info(f"🔍 Starting scan for {len(SYMBOLS)} symbols on {len(exchanges)} exchanges...")
     results = []
+    
     for symbol in SYMBOLS:
         prices = {}
         for name, exchange in exchanges.items():
@@ -67,7 +69,6 @@ def find_arbitrage():
                 prices[name] = mid_price
 
         if len(prices) < 2:
-            logger.info(f"⚠️  {symbol}: Only {len(prices)} exchange(s) available")
             continue
 
         max_price = max(prices.values())
@@ -86,6 +87,11 @@ def find_arbitrage():
                 'Profit (after fees)': f"{profit:.2f}%",
                 'Time': datetime.now().strftime("%H:%M:%S")
             })
-            logger.info(f"✅ Arbitrage found: {symbol} ({profit:.2f}%)")
+            logger.info(f"💰 Found arbitrage: {symbol} - {profit:.2f}% profit")
 
+    if results:
+        logger.info(f"✅ Scan complete. Found {len(results)} opportunity(ies).")
+    else:
+        logger.info(f"⏳ Scan complete. No profitable opportunities found.")
+    
     return pd.DataFrame(results) if results else pd.DataFrame()
