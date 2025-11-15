@@ -1,11 +1,11 @@
-# Crypto Arbitrage Dashboard
+# Crypto Arbitrage Scanner
 
-This project is a cryptocurrency arbitrage scanner that identifies and visualizes arbitrage opportunities across multiple exchanges. It fetches real-time price data, calculates potential profits, and displays the results in a user-friendly dashboard using Streamlit.
+A cryptocurrency arbitrage scanner that identifies and visualizes arbitrage opportunities across multiple exchanges. It fetches price data, calculates potential profits, and displays the results in a Streamlit dashboard.
 
-## Project Structure
+## Project structure
 
 ```
-crypto-arbitrage-dashboard
+arbitrage_scanner
 ├── src
 │   ├── __init__.py
 │   ├── arbitrage_scanner.py
@@ -13,7 +13,6 @@ crypto-arbitrage-dashboard
 │   └── config.py
 ├── app.py
 ├── requirements.txt
-├── Procfile
 ├── .streamlit
 │   └── config.toml
 ├── .gitignore
@@ -22,56 +21,59 @@ crypto-arbitrage-dashboard
     └── test_arbitrage.py
 ```
 
-## Setup Instructions
+## Setup
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd crypto-arbitrage-dashboard
-   ```
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd arbitrage_scanner
+```
 
-2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
+2. Create a virtual environment:
 
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+- Windows (PowerShell / CMD):
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1   # PowerShell
+venv\Scripts\activate.bat   # CMD
+```
 
-4. **Run the application locally:**
-   ```bash
-   streamlit run app.py
-   ```
+- macOS / Linux:
+```bash
+python -m venv venv
+source venv/bin/activate
+```
 
-## Usage
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-- The application will start a local server, and you can access the dashboard in your web browser at `http://localhost:8501`.
-- The dashboard will display any arbitrage opportunities found across the specified cryptocurrency exchanges.
-
-## Deployment on Render.com
-
-To deploy the application on Render.com, follow these steps:
-
-1. Ensure you have a Render.com account and create a new web service.
-2. Connect your GitHub repository containing the project.
-3. Set the build command to:
-   ```
-   pip install -r requirements.txt
-   ```
-4. Set the start command to:
-   ```
-   streamlit run app.py
-   ```
-5. Deploy the service and monitor the logs for any issues.
+4. Run locally:
+```bash
+streamlit run app.py
+```
+Open the dashboard at http://localhost:8501
 
 ## Testing
 
-Unit tests for the arbitrage scanner functionality are located in the `tests/test_arbitrage.py` file. Ensure to run these tests to verify that the core logic works as intended.
+Run unit tests:
+```bash
+pytest
+```
 
-## Important Notes
+## Deployment (example: Render.com)
 
-- This project is for educational purposes and should not be considered financial advice.
-- Always test the application locally before deploying to ensure everything works as expected.
+- Build command:
+```
+pip install -r requirements.txt
+```
+- Start command:
+```
+streamlit run app.py
+```
+
+## Notes
+
+- Educational use only; not financial advice.
+- If the repository structure differs from the tree above, provide the current tree and I will update this README accordingly.

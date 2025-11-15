@@ -2,4 +2,3 @@ ccxt
 streamlit
 pandas
 datetime
-```
