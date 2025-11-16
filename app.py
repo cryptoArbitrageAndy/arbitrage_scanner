@@ -268,3 +268,4 @@ for i in range(secs_left, -1, -1):
     time.sleep(1)
 
 # page rerun so UI picks up the newest cached values
+st.rerun()
