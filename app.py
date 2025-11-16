@@ -238,7 +238,7 @@ try:
                      color_continuous_scale=['#ff4d6d', '#16c784'],
                      labels={'ProfitNum': 'Profit %'},
                      height=220)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     elif 'Profit (after fees)' in best_df.columns:
         chart_df = best_df.copy()
         chart_df['ProfitNum'] = chart_df['Profit (after fees)'].astype(str).str.rstrip('%').astype(float)
