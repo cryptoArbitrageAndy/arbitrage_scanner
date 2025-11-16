@@ -45,7 +45,7 @@ st.markdown(
 st.markdown(
     """
     <div class="header">
-      <div class="brand">Crypto Arbitrage • Neon</div>
+      <div class="brand">Crypto arbitrage scanner</div>
       <div style="flex:1"></div>
       <div class="small">Live multi-exchange price scanner</div>
     </div>

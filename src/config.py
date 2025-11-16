@@ -7,6 +7,6 @@ SYMBOLS = [
     'ETH/USDT', 'SOL/USDT',
     'XRP/USDT', 'ADA/USDT', 'DOGE/USDT',
 ]
-MIN_DIFF = 0.001  # Increased threshold (more exchanges = more noise)
-FEE_RATE = 0.002  # 0.2% per trade
+MIN_DIFF = 0.0  # Increased threshold (more exchanges = more noise)
+FEE_RATE = 0.0  # 0.2% per trade
 REFRESH_SEC = 30
