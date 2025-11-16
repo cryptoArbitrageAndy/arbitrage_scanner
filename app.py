@@ -71,6 +71,9 @@ def best_per_pair(df, symbols):
     for s in missing:
         best = pd.concat([best, pd.DataFrame([{"Pair": s, "Buy": "-", "Sell": "-", "Spread": "-", "Profit (after fees)": "0.00%", "Time": "-"}])], ignore_index=True, sort=False)
     best = best.set_index('Pair').reindex(symbols).reset_index()
+    
+    # Debug output
+    print(f"best_per_pair: {len(best)} rows, columns: {best.columns.tolist()}")
     return best
 
 # --- Helper: fetch prices across exchanges (used by worker) ---
@@ -109,34 +112,42 @@ CACHE: Dict[str, Any] = {
     "last_fetch": datetime.now(timezone.utc),
 }
 cache_lock = threading.Lock()
+_worker_started = False  # Global flag (NOT in session_state)
 
 def background_fetch_loop():
     while True:
         try:
             arbs = find_arbitrage()
-        except Exception:
+        except Exception as e:
+            print(f"❌ Error fetching arbs: {e}")
             arbs = pd.DataFrame()
         try:
             prices = get_all_prices()
-        except Exception:
+        except Exception as e:
+            print(f"❌ Error fetching prices: {e}")
             prices = pd.DataFrame()
         # update shared cache (do NOT call streamlit APIs from background thread)
         with cache_lock:
             CACHE['arbs'] = arbs
             CACHE['prices'] = prices
             CACHE['last_fetch'] = datetime.now(timezone.utc)
+        print(f"🔄 Background worker updated cache at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
         time.sleep(max(1, int(REFRESH_SEC)))
 
-# --- Start background worker once per session ---
-if 'worker_started' not in st.session_state:
+# --- Start background worker once per Python process ---
+if not _worker_started:
     # perform an initial synchronous fetch so UI has something immediately (main thread)
     try:
         initial_arbs = find_arbitrage()
-    except Exception:
+        print(f"✅ Initial arbs: {len(initial_arbs)} rows, columns: {initial_arbs.columns.tolist()}")
+    except Exception as e:
+        print(f"❌ Error in initial arbs fetch: {e}")
         initial_arbs = pd.DataFrame()
     try:
         initial_prices = get_all_prices()
-    except Exception:
+        print(f"✅ Initial prices: {len(initial_prices)} rows")
+    except Exception as e:
+        print(f"❌ Error in initial prices fetch: {e}")
         initial_prices = pd.DataFrame()
     with cache_lock:
         CACHE['arbs'] = initial_arbs
@@ -145,7 +156,8 @@ if 'worker_started' not in st.session_state:
     # start background worker (worker updates CACHE only)
     t = threading.Thread(target=background_fetch_loop, daemon=True, name="bg_fetcher")
     t.start()
-    st.session_state['worker_started'] = True
+    _worker_started = True
+    print(f"🚀 Background worker started at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
 
 # --- Read cached values for display (read from thread-safe CACHE) ---
 with cache_lock:
@@ -159,11 +171,13 @@ best_df = best_per_pair(cached_arbs, list(SYMBOLS))
 # Top-right quick stats
 total_pairs = len(SYMBOLS)
 profit_vals = []
-if 'Profit (after fees)' in best_df.columns:
-    try:
-        profit_vals = best_df['Profit (after fees)'].astype(str).str.rstrip('%').astype(float).tolist()
-    except Exception:
-        profit_vals = []
+# Find the actual profit column name (flexible matching)
+profit_col = next((c for c in best_df.columns if 'profit' in c.lower()), None)
+if profit_col is not None:
+     try:
+        profit_vals = best_df[profit_col].astype(str).str.rstrip('%').astype(float).tolist()
+     except Exception:
+         profit_vals = []
 best_positive = max(profit_vals) if profit_vals else 0.0
 opportunities = sum(1 for v in profit_vals if v > 0)
 
@@ -199,8 +213,9 @@ with left:
             display_best[col] = display_best[col].apply(_format_num)
 
     # Ensure profit column stays formatted as percentage (if present)
-    if "Profit (after fees)" in display_best.columns:
-        display_best["Profit (after fees)"] = display_best["Profit (after fees)"].astype(str)
+    profit_col = next((c for c in display_best.columns if 'profit' in c.lower()), None)
+    if profit_col is not None:
+        display_best[profit_col] = display_best[profit_col].astype(str)
 
     st.dataframe(display_best, width='stretch', hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -231,17 +246,18 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # small profit chart (fallback if plotly unavailable)
 try:
-    if 'Profit (after fees)' in best_df.columns and px is not None:
+    profit_col = next((c for c in best_df.columns if 'profit' in c.lower()), None)
+    if profit_col is not None and px is not None:
         chart_df = best_df.copy()
-        chart_df['ProfitNum'] = chart_df['Profit (after fees)'].astype(str).str.rstrip('%').astype(float)
+        chart_df['ProfitNum'] = chart_df[profit_col].astype(str).str.rstrip('%').astype(float)
         fig = px.bar(chart_df, x='Pair', y='ProfitNum', color='ProfitNum',
                      color_continuous_scale=['#ff4d6d', '#16c784'],
                      labels={'ProfitNum': 'Profit %'},
                      height=220)
         st.plotly_chart(fig, width='stretch')
-    elif 'Profit (after fees)' in best_df.columns:
+    elif profit_col is not None:
         chart_df = best_df.copy()
-        chart_df['ProfitNum'] = chart_df['Profit (after fees)'].astype(str).str.rstrip('%').astype(float)
+        chart_df['ProfitNum'] = chart_df[profit_col].astype(str).str.rstrip('%').astype(float)
         st.bar_chart(chart_df.set_index('Pair')['ProfitNum'])
 except Exception:
     pass
@@ -257,6 +273,7 @@ with st.expander("Important Disclaimer", expanded=False):
     """)
 
 # --- Countdown UI: big number + label on same line. When reaches zero, rerun to show latest cached data ---
+initial_last_fetch = last_fetch  # capture initial fetch time before countdown
 for i in range(secs_left, -1, -1):
     html = f"""
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
@@ -267,5 +284,14 @@ for i in range(secs_left, -1, -1):
     countdown_placeholder.markdown(html, unsafe_allow_html=True)
     time.sleep(1)
 
-# page rerun so UI picks up the newest cached values
-st.rerun()
+# Only rerun if background worker has fetched new data
+with cache_lock:
+    current_last_fetch = CACHE.get('last_fetch', datetime.now(timezone.utc))
+
+if current_last_fetch > initial_last_fetch:
+    print(f"✅ New data available, rerunning...")
+    st.rerun()
+else:
+    print(f"⏳ No new data yet, waiting...")
+    time.sleep(1)
+    st.rerun()
