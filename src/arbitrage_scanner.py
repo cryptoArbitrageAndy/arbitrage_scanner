@@ -1,13 +1,22 @@
 import ccxt
 import pandas as pd
 import time
+import os
 import logging
 from datetime import datetime
 from .config import EXCHANGES, SYMBOLS, MIN_DIFF, FEE_RATE, REFRESH_SEC
 
 # === LOGGING ===
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging level from env var to avoid INFO noise on Render
+# Set LOG_LEVEL=INFO locally for debugging, or leave unset / set to WARNING/ERROR in production.
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'WARNING').upper()
+_numeric = getattr(logging, LOG_LEVEL, logging.WARNING)
+logging.basicConfig(level=_numeric, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Optionally reduce verbosity of noisy third-party loggers (adjust as needed)
+for _name in ('urllib3', 'asyncio', 'ccxt', 'streamlit'):
+    logging.getLogger(_name).setLevel(_numeric)
 
 # === INITIALIZE EXCHANGES ===
 exchanges = {}
@@ -100,7 +109,7 @@ def find_arbitrage():
                 'Buy': f"{buy_ex.upper()} @ ${prices[buy_ex]:,.2f}",
                 'Sell': f"{sell_ex.upper()} @ ${prices[sell_ex]:,.2f}",
                 'Spread': f"{diff_pct:.2f}%",
-                'Profit (after fees)': f"{profit:.2f}%",
+                f'Profit (after fees {FEE_RATE*100:.2f}%)': f"{profit:.2f}%",
                 'Time': datetime.now().strftime("%H:%M:%S")
             })
             logger.info(f"💰 Found arbitrage: {symbol} - {profit:.2f}% profit")
