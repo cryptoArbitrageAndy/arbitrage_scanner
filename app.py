@@ -72,8 +72,6 @@ def best_per_pair(df, symbols):
         best = pd.concat([best, pd.DataFrame([{"Pair": s, "Buy": "-", "Sell": "-", "Spread": "-", "Profit (after fees)": "0.00%", "Time": "-"}])], ignore_index=True, sort=False)
     best = best.set_index('Pair').reindex(symbols).reset_index()
     
-    # Debug output
-    print(f"best_per_pair: {len(best)} rows, columns: {best.columns.tolist()}")
     return best
 
 # --- Helper: fetch prices across exchanges (used by worker) ---
@@ -112,7 +110,6 @@ CACHE: Dict[str, Any] = {
     "last_fetch": datetime.now(timezone.utc),
 }
 cache_lock = threading.Lock()
-_worker_started = False  # Global flag (NOT in session_state)
 
 def background_fetch_loop():
     while True:
@@ -134,30 +131,32 @@ def background_fetch_loop():
         print(f"🔄 Background worker updated cache at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
         time.sleep(max(1, int(REFRESH_SEC)))
 
-# --- Start background worker once per Python process ---
-if not _worker_started:
-    # perform an initial synchronous fetch so UI has something immediately (main thread)
-    try:
-        initial_arbs = find_arbitrage()
-        print(f"✅ Initial arbs: {len(initial_arbs)} rows, columns: {initial_arbs.columns.tolist()}")
-    except Exception as e:
-        print(f"❌ Error in initial arbs fetch: {e}")
-        initial_arbs = pd.DataFrame()
-    try:
-        initial_prices = get_all_prices()
-        print(f"✅ Initial prices: {len(initial_prices)} rows")
-    except Exception as e:
-        print(f"❌ Error in initial prices fetch: {e}")
-        initial_prices = pd.DataFrame()
-    with cache_lock:
-        CACHE['arbs'] = initial_arbs
-        CACHE['prices'] = initial_prices
-        CACHE['last_fetch'] = datetime.now(timezone.utc)
-    # start background worker (worker updates CACHE only)
-    t = threading.Thread(target=background_fetch_loop, daemon=True, name="bg_fetcher")
-    t.start()
-    _worker_started = True
-    print(f"🚀 Background worker started at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
+# --- Start background worker once per Python process (using session_state) ---
+if 'bg_worker_thread' not in st.session_state:
+     # perform an initial synchronous fetch so UI has something immediately (main thread)
+     try:
+         initial_arbs = find_arbitrage()
+         print(f"✅ Initial arbs: {len(initial_arbs)} rows, columns: {initial_arbs.columns.tolist()}")
+     except Exception as e:
+         print(f"❌ Error in initial arbs fetch: {e}")
+         initial_arbs = pd.DataFrame()
+     try:
+         initial_prices = get_all_prices()
+         print(f"✅ Initial prices: {len(initial_prices)} rows")
+     except Exception as e:
+         print(f"❌ Error in initial prices fetch: {e}")
+         initial_prices = pd.DataFrame()
+     with cache_lock:
+         CACHE['arbs'] = initial_arbs
+         CACHE['prices'] = initial_prices
+         CACHE['last_fetch'] = datetime.now(timezone.utc)
+     # start background worker (worker updates CACHE only)
+     t = threading.Thread(target=background_fetch_loop, daemon=True, name="bg_fetcher")
+     t.start()
+     st.session_state['bg_worker_thread'] = t
+     print(f"🚀 Background worker started at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
+else:
+    print(f"✅ Background worker already running (thread alive: {st.session_state.get('bg_worker_thread', None) and st.session_state['bg_worker_thread'].is_alive()})")
 
 # --- Read cached values for display (read from thread-safe CACHE) ---
 with cache_lock:
@@ -272,26 +271,23 @@ with st.expander("Important Disclaimer", expanded=False):
     - Use at your own risk.
     """)
 
-# --- Countdown UI: big number + label on same line. When reaches zero, rerun to show latest cached data ---
-initial_last_fetch = last_fetch  # capture initial fetch time before countdown
-for i in range(secs_left, -1, -1):
-    html = f"""
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
-      <span style="font-size:28px;font-weight:800;color:#00aaff">{i}s</span>
-      <span style="font-size:14px;color:#9aa4b2;font-weight:600">Next refresh</span>
-    </div>
-    """
-    countdown_placeholder.markdown(html, unsafe_allow_html=True)
-    time.sleep(1)
+# --- Countdown UI: big number + label on same line ---
+# Display countdown without blocking (non-blocking)
+html = f"""
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
+  <span style="font-size:28px;font-weight:800;color:#00aaff">{secs_left}s</span>
+  <span style="font-size:14px;color:#9aa4b2;font-weight:600">Next refresh</span>
+</div>
+"""
+countdown_placeholder.markdown(html, unsafe_allow_html=True)
 
-# Only rerun if background worker has fetched new data
-with cache_lock:
-    current_last_fetch = CACHE.get('last_fetch', datetime.now(timezone.utc))
-
-if current_last_fetch > initial_last_fetch:
-    print(f"✅ New data available, rerunning...")
+# Auto-rerun after REFRESH_SEC using Streamlit's built-in rerun trigger
+if secs_left <= 0:
+    print(f"✅ Refresh interval complete, rerunning...")
+    time.sleep(0.5)  # small delay to ensure background worker has updated
     st.rerun()
 else:
-    print(f"⏳ No new data yet, waiting...")
-    time.sleep(1)
+    # Schedule a rerun after the remaining seconds
+    st.session_state['last_rerun'] = datetime.now(timezone.utc)
+    time.sleep(0.5)
     st.rerun()
