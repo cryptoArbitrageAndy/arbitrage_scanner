@@ -16,16 +16,21 @@ st.markdown("""
 st.title("🚀 Crypto Arbitrage Dashboard")
 st.caption("Visualize arbitrage opportunities and live prices across multiple exchanges.")
 
-with st.expander("Important Disclaimer", expanded=True):
-    st.markdown("""
-    - This is **not financial advice**.
-    - Arbitrage opportunities may **disappear in seconds**.
-    - Fees, slippage & latency are **estimates**.
-    - Use at your own risk.
-    """)
-
 # --- Fetch data ---
 arbitrage_df = find_arbitrage()
+
+# --- Always show most profitable trade per symbol ---
+def get_best_opportunity_per_symbol(arbitrage_df):
+    if arbitrage_df.empty:
+        return pd.DataFrame()
+    # Ensure 'Pair' and 'Profit (after fees)' columns exist
+    arbitrage_df['Profit (after fees)'] = arbitrage_df['Profit (after fees)'].str.rstrip('%').astype(float)
+    best_trades = arbitrage_df.sort_values('Profit (after fees)', ascending=False).groupby('Pair').head(1)
+    # Restore formatting
+    best_trades['Profit (after fees)'] = best_trades['Profit (after fees)'].map(lambda x: f"{x:.2f}%")
+    return best_trades
+
+best_arbs_df = get_best_opportunity_per_symbol(arbitrage_df)
 
 # --- Fetch all recent prices ---
 def get_all_prices():
@@ -55,21 +60,31 @@ with col2:
     countdown_placeholder = st.empty()
 
 # --- Arbitrage Table ---
-if not arbitrage_df.empty:
-    st.markdown("### 🏆 **Arbitrage Opportunities**")
+st.markdown("### 🏆 **Most Profitable Trades Per Pair**")
+if not best_arbs_df.empty:
     st.dataframe(
-        arbitrage_df.style.apply(
+        best_arbs_df.style.apply(
             lambda x: ['background-color: #ffe082' for _ in x], axis=1
         ),
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
 else:
-    st.info("⏳ No profitable opportunities right now...")
+    st.info("⏳ No opportunities found for any pair right now...")
 
 # --- Prices Table ---
 st.markdown("### 💹 **Recent Prices Across Exchanges**")
-st.dataframe(prices_df, use_container_width=True, hide_index=True)
+st.write(f"**Last scan:** {pd.Timestamp.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
+st.dataframe(prices_df, width='stretch', hide_index=True)
+
+# --- Disclaimer at the bottom ---
+with st.expander("Important Disclaimer", expanded=False):
+    st.markdown("""
+    - This is **not financial advice**.
+    - Arbitrage opportunities may **disappear in seconds**.
+    - Fees, slippage & latency are **estimates**.
+    - Use at your own risk.
+    """)
 
 # --- Countdown ---
 for i in range(30, 0, -1):
