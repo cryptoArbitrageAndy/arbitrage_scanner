@@ -14,10 +14,15 @@ exchanges = {}
 for name in EXCHANGES:
     try:
         exchange_class = getattr(ccxt, name)
-        exchanges[name] = exchange_class({
+        init_kwargs = {
             'enableRateLimit': True,
             'timeout': 10000,
-        })
+        }
+        # Ensure Huobi uses spot API (avoids hbdm.com swap endpoints)
+        if name.lower() in ('huobi', 'huobipro'):
+            init_kwargs.setdefault('options', {})
+            init_kwargs['options']['defaultType'] = 'spot'
+        exchanges[name] = exchange_class(init_kwargs)
         logger.info(f"✅ {name} initialized")
     except Exception as e:
         logger.error(f"❌ Failed to init {name}: {e}")
@@ -29,14 +34,25 @@ def fetch_price(exchange, symbol, exchange_name):
         if exchange_name == 'binance':
             normalized = symbol.replace('/', '')
         elif exchange_name == 'coinbase':
-            normalized = symbol.replace('/', '-')
+            normalized = symbol.replace('/', '-')  # e.g., BTC/USD -> BTC-USD
         elif exchange_name == 'kraken':
+            # Kraken uses XXBTZUSD for BTC/USD, XETHZUSD for ETH/USD
             base = symbol.split('/')[0]
             quote = symbol.split('/')[1]
             if base == 'BTC':
                 normalized = 'XXBTZUSD' if quote == 'USD' else 'XBTUSDT'
             elif base == 'ETH':
                 normalized = 'XETHZUSD' if quote == 'USD' else 'ETHUSDT'
+            elif base == 'LTC':
+                normalized = 'XLTCZUSD' if quote == 'USD' else 'LTCUSDT'
+            elif base == 'ADA':
+                normalized = 'ADAUSD' if quote == 'USD' else 'ADAUSDT'
+            elif base == 'DOGE':
+                 normalized = 'DOGEUSD' if quote == 'USD' else 'DOGE/USDT'
+            elif base == 'SOL':
+                normalized = 'SOLUSD' if quote == 'USD' else 'SOLUSDT'
+            elif base == 'XRP':
+                normalized = 'XXRPZUSD' if quote == 'USD' else 'XRPUSDT'
             else:
                 normalized = symbol.replace('/', 'Z' if quote == 'USD' else '')
         elif exchange_name == 'okx':
