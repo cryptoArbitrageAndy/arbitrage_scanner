@@ -52,13 +52,6 @@ def get_all_prices():
 
 prices_df = get_all_prices()
 
-# --- Layout ---
-col1, col2 = st.columns([2, 1])
-with col1:
-    st.write(f"**Last scan:** {pd.Timestamp.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
-with col2:
-    countdown_placeholder = st.empty()
-
 # --- Arbitrage Table ---
 st.markdown("### 🏆 **Most Profitable Trades Per Pair**")
 if not best_arbs_df.empty:
@@ -74,7 +67,15 @@ else:
 
 # --- Prices Table ---
 st.markdown("### 💹 **Recent Prices Across Exchanges**")
-st.write(f"**Last scan:** {pd.Timestamp.now().strftime('%b %d, %Y %H:%M:%S')} UTC")
+
+# Place last scan and next refresh here
+last_scan = pd.Timestamp.now().strftime('%b %d, %Y %H:%M:%S')
+col1, col2 = st.columns([2, 1])
+with col1:
+    st.write(f"**Last scan:** {last_scan} UTC")
+with col2:
+    countdown_placeholder = st.empty()
+
 st.dataframe(prices_df, width='stretch', hide_index=True)
 
 # --- Disclaimer at the bottom ---
