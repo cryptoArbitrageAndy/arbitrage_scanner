@@ -120,3 +120,18 @@ def find_arbitrage():
         logger.info(f"⏳ Scan complete. No profitable opportunities found.")
     
     return pd.DataFrame(results) if results else pd.DataFrame()
+
+
+def get_all_prices_df() -> pd.DataFrame:
+    """Returns a clean matrix: Pair | Binance | Kraken | Coinbase"""
+    from config import SYMBOLS, EXCHANGES
+    data = {"Pair": SYMBOLS}
+    for name, exchange in exchanges.items():
+        prices = []
+        for symbol in SYMBOLS:
+            bid, ask = fetch_price(exchange, symbol, name)
+            mid = (bid + ask) / 2 if bid and ask else None
+            prices.append(mid)
+        data[name.upper()] = prices
+    df = pd.DataFrame(data)
+    return df
