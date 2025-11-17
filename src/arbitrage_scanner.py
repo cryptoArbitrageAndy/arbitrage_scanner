@@ -109,7 +109,7 @@ def find_arbitrage():
                 'Buy': f"{buy_ex.upper()} @ ${prices[buy_ex]:,.2f}",
                 'Sell': f"{sell_ex.upper()} @ ${prices[sell_ex]:,.2f}",
                 'Spread': f"{diff_pct:.2f}%",
-                f'Profit (after fees {FEE_RATE*100:.2f}%)': f"{profit:.2f}%",
+                f'Profit (after fees)': f"{profit:.2f}%",
                 'Time': datetime.now().strftime("%H:%M:%S")
             })
             logger.info(f"💰 Found arbitrage: {symbol} - {profit:.2f}% profit")

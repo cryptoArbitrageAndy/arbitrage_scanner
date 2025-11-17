@@ -38,19 +38,58 @@ arbitrage_ph = st.empty()
 status_ph = st.empty()
 countdown_ph = st.empty()
 
-# ────────────────────────────── Main Loop (Zero Downtime) ──────────────────────────────
+# ────────────────────────────── Main Loop ──────────────────────────────
 while True:
     price_matrix_df = get_all_prices_df()
     arbitrage_df = find_arbitrage()
 
-    # ── 1. Price Matrix (Green = highest, Red = lowest) ──
+    # ── 1. Arbitrage Table (Glowing green rows when profitable) ──
+    with arbitrage_ph.container():
+        st.subheader("Arbitrage Opportunities (>1% profit after fees)")
+        if not arbitrage_df.empty:
+            # CRITICAL FIX: Convert only numeric columns to proper types BEFORE styling
+            df = arbitrage_df.copy()
+            if "Profit (after fees)" in df.columns:
+                df["Profit (after fees)"] = pd.to_numeric(
+                    df["Profit (after fees)"].astype(str).str.replace("%", "").str.strip(),
+                    errors="coerce"
+                )
+            if "Spread" in df.columns:
+                df["Spread"] = pd.to_numeric(df["Spread"].astype(str).str.replace("%", ""), errors="coerce")
+
+            # Highlight profitable rows
+            def highlight_profit(df_in):
+                return pd.DataFrame(
+                    ["background-color: rgba(0,255,157,0.15)" if v > 0 else "" for v in df_in["Profit (after fees)"]],
+                    index=df_in.index, columns=["Profit (after fees)"]
+                ).reindex(columns=df_in.columns, fill_value="")
+
+            # Only format columns that are actually numeric
+            format_dict = {}
+            if "Spread" in df.columns and pd.api.types.is_numeric_dtype(df["Spread"]):
+                format_dict["Spread"] = "{:.2f}%"
+            if "Profit (after fees)" in df.columns and pd.api.types.is_numeric_dtype(df["Profit (after fees)"]):
+                format_dict["Profit (after fees)"] = "{:.2f}%"
+
+            styled = (
+                df.style
+                .apply(highlight_profit, axis=None)
+                .format(format_dict, na_rep="—")
+            )
+            st.dataframe(styled)
+            st.success(f"{len(df)} active arbitrage(s) right now!")
+        else:
+            st.info("No profitable arbitrage – scanner running!")
+
+    # ── 2. Price Matrix (Green = highest, Red = lowest) ──
     with price_ph.container():
         st.subheader("Live Price Matrix")
         if not price_matrix_df.empty:
-            def highlight_prices(styler):
-                df = styler.data.iloc[:, 1:]  # Exclude "Pair" column
+            def highlight_extremes(styler):
+                df = styler.data
+                numeric_cols = df.select_dtypes(include='number').columns
                 styled = styler
-                for col in df.columns:
+                for col in numeric_cols:
                     max_val = df[col].max()
                     min_val = df[col].min()
                     styled = styled.map(
@@ -58,37 +97,11 @@ while True:
                                   "color: #ff3b5c; font-weight: bold;" if pd.notna(x) and x == min_val else "",
                         subset=(slice(None), col)
                     )
-                return styled.format("${:,.2f}", subset=df.columns, na_rep="—")
+                return styled.format({col: "${:,.2f}" for col in numeric_cols}, na_rep="—")
 
-            st.dataframe(highlight_prices(price_matrix_df.style))
+            st.dataframe(highlight_extremes(price_matrix_df.style))
         else:
-            st.info("Loading prices...")
-
-    # ── 2. Arbitrage Table (Green glowing rows when profitable) ──
-    with arbitrage_ph.container():
-        st.subheader("Arbitrage Opportunities (>1% profit after fees)")
-        if not arbitrage_df.empty:
-            def highlight_profit_rows(df):
-                # Return list of CSS styles for each row
-                return pd.DataFrame([
-                    ["background-color: rgba(0,255,157,0.15)"] * len(df.columns)
-                    if "Profit (after fees)" in row and float(str(row["Profit (after fees)"]).replace("%","").strip()) > 0
-                    else [""] * len(df.columns)
-                    for _, row in df.iterrows()
-                ], index=df.index, columns=df.columns)
-
-            styled_arbitrage = (
-                arbitrage_df.style
-                .apply(highlight_profit_rows, axis=None)
-                .format({
-                    "Spread": "{:.2f}%",
-                    "Profit (after fees)": "{:.2f}%"
-                })
-            )
-            st.dataframe(styled_arbitrage)
-            st.success(f"{len(arbitrage_df)} active arbitrage(s) right now!")
-        else:
-            st.info("No profitable arbitrage at the moment – scanner is running!")
+            st.info("Loading prices...")    
 
     # ── 3. Status & Countdown ──
     status_ph.markdown(f"**Last update:** {datetime.now().strftime('%H:%M:%S')} UTC")
