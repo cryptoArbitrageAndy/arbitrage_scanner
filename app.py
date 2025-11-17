@@ -20,21 +20,19 @@ st.markdown("""
     .css-1d391kg {padding-top: 1rem;}
     .css-1y0t9cy {background-color: #0e1117; color: #fafafa;}
     .stMetric {background: #1a1c2c; padding: 12px; border-radius: 12px; border-left: 5px solid #6c5ce7;}
-    h1 {color: #6c5ce7; text-align: center; font-size: 3rem; margin-bottom: 0;}
-    .stDataFrame {border: 1px solid #2d2d44; border-radius: 10px;}
+    h1 {color: #6c5ce7; text-align: center; font-size: 3rem;}
 </style>
 """, unsafe_allow_html=True)
 
-# Header
 st.title("Live Crypto Arbitrage Scanner")
-st.markdown("##### Binance • Kraken • Coinbase Pro • Real-time • Zero Downtime")
+st.markdown("##### Real-time • Zero Downtime")
 
 with st.expander("Disclaimer", expanded=False):
     st.markdown("• Not financial advice • Opportunities vanish instantly • Use at your own risk")
 
-# Placeholders
-price_ph = st.empty()
-arbitrage_ph = st.empty()
+# Placeholders (order = what user sees first)
+arbitrage_ph = st.empty()      # ← Now FIRST
+price_ph = st.empty()          # ← Now SECOND
 status_ph = st.empty()
 countdown_ph = st.empty()
 
@@ -43,45 +41,39 @@ while True:
     price_matrix_df = get_all_prices_df()
     arbitrage_df = find_arbitrage()
 
-    # ── 1. Arbitrage Table (Glowing green rows when profitable) ──
+    # ── 1. ARBITRAGE TABLE FIRST (most important) ──
     with arbitrage_ph.container():
         st.subheader("Arbitrage Opportunities (>1% profit after fees)")
         if not arbitrage_df.empty:
-            # CRITICAL FIX: Convert only numeric columns to proper types BEFORE styling
             df = arbitrage_df.copy()
-            if "Profit (after fees)" in df.columns:
-                df["Profit (after fees)"] = pd.to_numeric(
-                    df["Profit (after fees)"].astype(str).str.replace("%", "").str.strip(),
+            profit_col = "Profit (after fees)"
+            if profit_col in df.columns:
+                df[profit_col] = pd.to_numeric(
+                    df[profit_col].astype(str).str.replace("%", "").str.strip(),
                     errors="coerce"
                 )
             if "Spread" in df.columns:
                 df["Spread"] = pd.to_numeric(df["Spread"].astype(str).str.replace("%", ""), errors="coerce")
 
-            # Highlight profitable rows
             def highlight_profit(df_in):
                 return pd.DataFrame(
-                    ["background-color: rgba(0,255,157,0.15)" if v > 0 else "" for v in df_in["Profit (after fees)"]],
-                    index=df_in.index, columns=["Profit (after fees)"]
+                    ["background-color: rgba(0,255,157,0.15)" if v > 0 else "" for v in df_in[profit_col]],
+                    index=df_in.index, columns=[profit_col]
                 ).reindex(columns=df_in.columns, fill_value="")
 
-            # Only format columns that are actually numeric
             format_dict = {}
             if "Spread" in df.columns and pd.api.types.is_numeric_dtype(df["Spread"]):
                 format_dict["Spread"] = "{:.2f}%"
-            if "Profit (after fees)" in df.columns and pd.api.types.is_numeric_dtype(df["Profit (after fees)"]):
-                format_dict["Profit (after fees)"] = "{:.2f}%"
+            if profit_col in df.columns and pd.api.types.is_numeric_dtype(df[profit_col]):
+                format_dict[profit_col] = "{:.2f}%"
 
-            styled = (
-                df.style
-                .apply(highlight_profit, axis=None)
-                .format(format_dict, na_rep="—")
-            )
+            styled = df.style.apply(highlight_profit, axis=None).format(format_dict, na_rep="—")
             st.dataframe(styled)
             st.success(f"{len(df)} active arbitrage(s) right now!")
         else:
-            st.info("No profitable arbitrage – scanner running!")
+            st.info("No profitable arbitrage at the moment – scanner is running!")
 
-    # ── 2. Price Matrix (Green = highest, Red = lowest) ──
+    # ── 2. PRICE MATRIX SECOND ──
     with price_ph.container():
         st.subheader("Live Price Matrix")
         if not price_matrix_df.empty:
@@ -101,9 +93,9 @@ while True:
 
             st.dataframe(highlight_extremes(price_matrix_df.style))
         else:
-            st.info("Loading prices...")    
+            st.info("Loading prices...")
 
-    # ── 3. Status & Countdown ──
+    # ── Status & Countdown ──
     status_ph.markdown(f"**Last update:** {datetime.now().strftime('%H:%M:%S')} UTC")
 
     for secs in range(REFRESH_SEC, 0, -1):
