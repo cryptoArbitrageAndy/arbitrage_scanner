@@ -56,19 +56,13 @@ st.markdown("""
 
 # ────────────────────────────── HEADER (always visible) ──────────────────────────────
 last_update = datetime.now(timezone.utc).strftime("%H:%M:%S")
+st.markdown("<h1 class='hero-title'>Arbitrage Pro</h1>", unsafe_allow_html=True)
+st.markdown("<p class='hero-subtitle'>Real-time crypto arbitrage • Zero downtime • Studio-grade</p>", unsafe_allow_html=True)
 st.markdown(f"""
 <div class="top-bar">
     Live Arbitrage Scanner • <strong>Last update: {last_update} UTC</strong>
 </div>
 """, unsafe_allow_html=True)
-
-st.markdown("<h1 class='hero-title'>Arbitrage Pro</h1>", unsafe_allow_html=True)
-st.markdown("<p class='hero-subtitle'>Real-time crypto arbitrage • Zero downtime • Studio-grade</p>", unsafe_allow_html=True)
-
-# Countdown orb (static HTML element with fixed ID)
-_, col_center, _ = st.columns([1,1,1])
-with col_center:
-    st.markdown('<div class="countdown-orb" id="countdownOrb">15<br><small>sec</small></div>', unsafe_allow_html=True)
 
 # Placeholders for tables
 arbitrage_ph = st.empty()
@@ -138,12 +132,6 @@ while True:
 
     # ── Countdown (now 100% visible) ──
     for secs in range(REFRESH_SEC, 0, -1):
-        st.markdown(f"""
-        <script>
-            const orb = document.getElementById('countdownOrb');
-            if (orb) orb.innerHTML = '{secs}<br><small>sec</small>';
-        </script>
-        """, unsafe_allow_html=True)
         time.sleep(1)
 
     st.rerun()
