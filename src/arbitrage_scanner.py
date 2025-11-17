@@ -3,7 +3,7 @@ import pandas as pd
 import time
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from .config import EXCHANGES, SYMBOLS, MIN_DIFF, FEE_RATE, REFRESH_SEC
 
 # === LOGGING ===
@@ -125,7 +125,7 @@ def find_arbitrage():
                 'Sell': f"{sell_ex.upper()} @ ${prices[sell_ex]:,.2f}",
                 'Spread': f"{diff_pct:.2f}%",
                 f'Profit (after fees)': f"{profit:.2f}%",
-                'Time': datetime.now().strftime("%H:%M:%S")
+                'Time UTC': datetime.now(timezone.utc).strftime("%H:%M:%S")
             })
             logger.info(f"💰 Found arbitrage: {symbol} - {profit:.2f}% profit")
 
