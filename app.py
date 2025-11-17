@@ -286,8 +286,4 @@ if secs_left <= 0:
     print(f"✅ Refresh interval complete, rerunning...")
     time.sleep(0.5)  # small delay to ensure background worker has updated
     st.rerun()
-else:
-    # Schedule a rerun after the remaining seconds
-    st.session_state['last_rerun'] = datetime.now(timezone.utc)
-    time.sleep(0.5)
-    st.rerun()
+# Do NOT rerun on every execution; only when countdown hits zero
