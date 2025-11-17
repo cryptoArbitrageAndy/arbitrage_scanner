@@ -19,7 +19,22 @@ for _name in ('urllib3', 'asyncio', 'ccxt', 'streamlit'):
     logging.getLogger(_name).setLevel(_numeric)
 
 # === INITIALIZE EXCHANGES ===
-exchanges = {}
+exchanges = {
+    'binance': ccxt.binance({
+        'enableRateLimit': True,       # ccxt automatically respects limits
+        'rateLimit': 1200,
+        'options': {'defaultType': 'spot'},
+        'timeout': 10000,
+    }),
+    'kraken': ccxt.kraken({
+        'enableRateLimit': True,
+        'timeout': 10000,
+    }),
+    'coinbase': ccxt.coinbase({
+        'enableRateLimit': True,
+        'timeout': 10000,
+    }),
+}
 for name in EXCHANGES:
     try:
         exchange_class = getattr(ccxt, name)
