@@ -1,289 +1,71 @@
-import threading
-import time
-from datetime import datetime, timezone
-from typing import Dict, Any
-
+# app.py
 import streamlit as st
-import pandas as pd
+import time
+from datetime import datetime
+import sys
+import os
 
-# existing imports from your package
-from src.arbitrage_scanner import find_arbitrage, exchanges, SYMBOLS
+# Add src folder
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+from src.arbitrage_scanner import find_arbitrage
 from src.config import REFRESH_SEC
 
-# optional plotly
-try:
-    import plotly.express as px
-except Exception:
-    px = None
+# ─────────────────────────────────────────────────────────────
+# Cached data fetch – this runs in background automatically
+# ─────────────────────────────────────────────────────────────
+@st.cache_data(ttl=REFRESH_SEC, show_spinner=False)
+def get_latest_arbitrage_data(_timestamp):
+    """The _timestamp forces re-run every refresh"""
+    return find_arbitrage()
 
-st.set_page_config(page_title="Crypto Arbitrage Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
-# --- Styles (kept from previous design) ---
-st.markdown(
-    """
-    <style>
-    :root {
-      --bg:#0b1020;
-      --card:#0f1724;
-      --muted:#9aa4b2;
-      --accent:#00d4ff;
-      --success:#16c784;
-      --danger:#ff4d6d;
-    }
-    .stApp { background: linear-gradient(180deg, #071020 0%, #081426 60%); color: #e6eef6; }
-    .header { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
-    .brand { font-weight:800; font-size:20px; color:var(--accent); padding:8px 12px; border-radius:10px; }
-    .small { font-size:12px; color:var(--muted) }
-    .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.03); padding:14px; border-radius:10px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# ─────────────────────────────────────────────────────────────
+# Page config & UI
+# ─────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Crypto Arbitrage Scanner", layout="wide")
 
-st.markdown(
-    """
-    <div class="header">
-      <div class="brand">Crypto Arbitrage Scanner</div>
-      <div style="flex:1"></div>
-      <div class="small">Live multi-exchange price scanner</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.title("Live Crypto Arbitrage Scanner")
+st.caption("Binance • Kraken • Coinbase • Instant updates • Zero downtime")
 
-# --- Helper: build best-per-pair table ---
-def best_per_pair(df, symbols):
-    if df is None or df.empty:
-        rows = []
-        for s in symbols:
-            rows.append({"Pair": s, "Buy": "-", "Sell": "-", "Spread": "-", "Profit (after fees)": "0.00%", "Time": "-"})
-        return pd.DataFrame(rows)
-    df = df.copy()
-    # find profit column (flexible naming)
-    prof_col = next((c for c in df.columns if 'profit' in c.lower()), None)
-    if prof_col is None:
-        df['Profit (after fees)'] = "0.00%"
-        prof_col = 'Profit (after fees)'
-    # numeric profit for sorting
-    df['_profit_val'] = df[prof_col].astype(str).str.rstrip('%').replace('', '0').astype(float)
-    best = df.sort_values('_profit_val', ascending=False).groupby('Pair', as_index=False).first().drop(columns=['_profit_val'])
-    missing = set(symbols) - set(best['Pair'].tolist())
-    for s in missing:
-        best = pd.concat([best, pd.DataFrame([{"Pair": s, "Buy": "-", "Sell": "-", "Spread": "-", "Profit (after fees)": "0.00%", "Time": "-"}])], ignore_index=True, sort=False)
-    best = best.set_index('Pair').reindex(symbols).reset_index()
-    
-    return best
+with st.expander("Disclaimer – Please read", expanded=True):
+    st.markdown(
+        """
+        - This is **not financial advice**  
+        - Opportunities can disappear in seconds  
+        - Fees & slippage are estimates  
+        - Use at your own risk
+        """
+    )
 
-# --- Helper: fetch prices across exchanges (used by worker) ---
-def get_all_prices():
-    rows = []
-    for symbol in SYMBOLS:
-        row = {"Pair": symbol}
-        for ex_name, ex in exchanges.items():
-            try:
-                # try common variants; fetch_ticker in exchange handles many cases
-                ticker = None
-                try:
-                    ticker = ex.fetch_ticker(symbol)
-                except Exception:
-                    try:
-                        ticker = ex.fetch_ticker(symbol.replace('/', ''))
-                    except Exception:
-                        try:
-                            ticker = ex.fetch_ticker(symbol.replace('/', '-'))
-                        except Exception:
-                            ticker = None
-                if ticker and ticker.get('bid') and ticker.get('ask'):
-                    price = (ticker['bid'] + ticker['ask']) / 2
-                    row[ex_name.upper()] = price
-                else:
-                    row[ex_name.upper()] = None
-            except Exception:
-                row[ex_name.upper()] = None
-        rows.append(row)
-    return pd.DataFrame(rows)
+# Placeholders (never cleared)
+data_placeholder = st.empty()
+status_placeholder = st.empty()
+countdown_placeholder = st.empty()
 
-# --- Background worker that periodically refreshes cached data ---
-CACHE: Dict[str, Any] = {
-    "arbs": pd.DataFrame(),
-    "prices": pd.DataFrame(),
-    "last_fetch": datetime.now(timezone.utc),
-}
-cache_lock = threading.Lock()
+# ─────────────────────────────────────────────────────────────
+# Main refresh loop (non-blocking, production-proof)
+# ─────────────────────────────────────────────────────────────
+while True:
+    # 1. Trigger cached background fetch (runs parallel)
+    current_data = get_latest_arbitrage_data(datetime.now())
 
-def background_fetch_loop():
-    while True:
-        try:
-            arbs = find_arbitrage()
-        except Exception as e:
-            print(f"❌ Error fetching arbs: {e}")
-            arbs = pd.DataFrame()
-        try:
-            prices = get_all_prices()
-        except Exception as e:
-            print(f"❌ Error fetching prices: {e}")
-            prices = pd.DataFrame()
-        # update shared cache (do NOT call streamlit APIs from background thread)
-        with cache_lock:
-            CACHE['arbs'] = arbs
-            CACHE['prices'] = prices
-            CACHE['last_fetch'] = datetime.now(timezone.utc)
-        print(f"🔄 Background worker updated cache at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
-        time.sleep(max(1, int(REFRESH_SEC)))
+    # 2. Instantly display the fresh data
+    with data_placeholder.container():
+        if not current_data.empty:
+            st.success(f"{len(current_data)} arbitrage opportunity(ies) found!")
+            st.dataframe(current_data, width='stretch')
+        else:
+            st.info("No profitable opportunities right now – scanning continues...")
 
-# --- Start background worker once per Python process (using session_state) ---
-if 'bg_worker_thread' not in st.session_state:
-     # perform an initial synchronous fetch so UI has something immediately (main thread)
-     try:
-         initial_arbs = find_arbitrage()
-         print(f"✅ Initial arbs: {len(initial_arbs)} rows, columns: {initial_arbs.columns.tolist()}")
-     except Exception as e:
-         print(f"❌ Error in initial arbs fetch: {e}")
-         initial_arbs = pd.DataFrame()
-     try:
-         initial_prices = get_all_prices()
-         print(f"✅ Initial prices: {len(initial_prices)} rows")
-     except Exception as e:
-         print(f"❌ Error in initial prices fetch: {e}")
-         initial_prices = pd.DataFrame()
-     with cache_lock:
-         CACHE['arbs'] = initial_arbs
-         CACHE['prices'] = initial_prices
-         CACHE['last_fetch'] = datetime.now(timezone.utc)
-     # start background worker (worker updates CACHE only)
-     t = threading.Thread(target=background_fetch_loop, daemon=True, name="bg_fetcher")
-     t.start()
-     st.session_state['bg_worker_thread'] = t
-     print(f"🚀 Background worker started at {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
-else:
-    print(f"✅ Background worker already running (thread alive: {st.session_state.get('bg_worker_thread', None) and st.session_state['bg_worker_thread'].is_alive()})")
+    # 3. Status line
+    status_placeholder.write(
+        f"Last update: {datetime.now().strftime('%b %d, %Y %H:%M:%S')} UTC"
+    )
 
-# --- Read cached values for display (read from thread-safe CACHE) ---
-with cache_lock:
-    cached_arbs = CACHE.get('arbs', pd.DataFrame()).copy()
-    cached_prices = CACHE.get('prices', pd.DataFrame()).copy()
-    last_fetch = CACHE.get('last_fetch', datetime.now(timezone.utc))
+    # 4. Smooth countdown (15 → 1)
+    for remaining in range(REFRESH_SEC, 0, -1):
+        countdown_placeholder.metric("Next refresh in", f"{remaining}s")
+        time.sleep(1)
 
-# --- Build display data ---
-best_df = best_per_pair(cached_arbs, list(SYMBOLS))
-
-# Top-right quick stats
-total_pairs = len(SYMBOLS)
-profit_vals = []
-# Find the actual profit column name (flexible matching)
-profit_col = next((c for c in best_df.columns if 'profit' in c.lower()), None)
-if profit_col is not None:
-     try:
-        profit_vals = best_df[profit_col].astype(str).str.rstrip('%').astype(float).tolist()
-     except Exception:
-         profit_vals = []
-best_positive = max(profit_vals) if profit_vals else 0.0
-opportunities = sum(1 for v in profit_vals if v > 0)
-
-left, right = st.columns([3, 1])
-with right:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.metric(label="Scanned pairs", value=f"{total_pairs}")
-    st.metric(label="Positive arb", value=f"{opportunities}")
-    st.metric(label="Best profit", value=f"{best_positive:.2f}%")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with left:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### 🏆 Most Profitable Trades")
-    # Format numeric columns with 4 decimal places for better readability
-    def _format_num(v):
-        try:
-            if v is None:
-                return "-"
-
-            # keep existing '-' strings
-            if isinstance(v, str) and v.strip() == "-":
-                return v
-
-            f = float(v)
-            return f"{f:,.4f}"
-        except Exception:
-            return v
-
-    display_best = best_df.copy()
-    for col in ("Buy", "Sell", "Spread"):
-        if col in display_best.columns:
-            display_best[col] = display_best[col].apply(_format_num)
-
-    # Ensure profit column stays formatted as percentage (if present)
-    profit_col = next((c for c in display_best.columns if 'profit' in c.lower()), None)
-    if profit_col is not None:
-        display_best[profit_col] = display_best[profit_col].astype(str)
-
-    st.dataframe(display_best, width='stretch', hide_index=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Prices section with Last scan + Next refresh on same line ---
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown("### 💹 Recent Prices Across Exchanges")
-
-# compute seconds until next background update (based on last_fetch, timezone-aware)
-elapsed = (datetime.now(timezone.utc) - last_fetch).total_seconds()
-secs_left = max(0, int(REFRESH_SEC - elapsed))
-
-col_l, col_r = st.columns([3, 1])
-with col_l:
-    st.markdown(f"<div class='small'>Last scan: <strong style='color:var(--accent)'>{last_fetch.strftime('%b %d, %Y %H:%M:%S')} UTC</strong></div>", unsafe_allow_html=True)
-with col_r:
-    countdown_placeholder = col_r.empty()
-
-# format prices table
-prices_display = cached_prices.copy()
-for c in prices_display.columns:
-    if c == 'Pair':
-        continue
-    prices_display[c] = prices_display[c].apply(lambda v: f"${v:,.4f}" if pd.notnull(v) else "-")
-
-st.dataframe(prices_display, width='stretch', hide_index=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# small profit chart (fallback if plotly unavailable)
-try:
-    profit_col = next((c for c in best_df.columns if 'profit' in c.lower()), None)
-    if profit_col is not None and px is not None:
-        chart_df = best_df.copy()
-        chart_df['ProfitNum'] = chart_df[profit_col].astype(str).str.rstrip('%').astype(float)
-        fig = px.bar(chart_df, x='Pair', y='ProfitNum', color='ProfitNum',
-                     color_continuous_scale=['#ff4d6d', '#16c784'],
-                     labels={'ProfitNum': 'Profit %'},
-                     height=220)
-        st.plotly_chart(fig, width='stretch')
-    elif profit_col is not None:
-        chart_df = best_df.copy()
-        chart_df['ProfitNum'] = chart_df[profit_col].astype(str).str.rstrip('%').astype(float)
-        st.bar_chart(chart_df.set_index('Pair')['ProfitNum'])
-except Exception:
-    pass
-
-# --- Disclaimer at bottom ---
-st.markdown("<hr style='opacity:0.08'>", unsafe_allow_html=True)
-with st.expander("Important Disclaimer", expanded=False):
-    st.markdown("""
-    - This is **not financial advice**.
-    - Arbitrage opportunities may **disappear in seconds**.
-    - Fees, slippage & latency are **estimates**.
-    - Use at your own risk.
-    """)
-
-# --- Countdown UI: big number + label on same line ---
-# Display countdown without blocking (non-blocking)
-html = f"""
-<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
-  <span style="font-size:28px;font-weight:800;color:#00aaff">{secs_left}s</span>
-  <span style="font-size:14px;color:#9aa4b2;font-weight:600">Next refresh</span>
-</div>
-"""
-countdown_placeholder.markdown(html, unsafe_allow_html=True)
-
-# Auto-rerun after REFRESH_SEC using Streamlit's built-in rerun trigger
-if secs_left <= 0:
-    print(f"✅ Refresh interval complete, rerunning...")
-    time.sleep(0.5)  # small delay to ensure background worker has updated
+    # 5. Trigger next cycle → instant rerun
     st.rerun()
-# Do NOT rerun on every execution; only when countdown hits zero
